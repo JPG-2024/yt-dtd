@@ -2,6 +2,9 @@ import argparse
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
+CLASSNAME = "yt-video-attribute-view-model__link-container"
+# title now contains: "Alo Wiza - Live @ New York City Sunrise {Melodic Techno & Progressive House DJ mix} 4K"
+
 def extract_links(url, classname):
     # Start Playwright and launch the browser
     with sync_playwright() as p:
@@ -26,28 +29,38 @@ def extract_links(url, classname):
     # Parse the page content with BeautifulSoup
     soup = BeautifulSoup(content, 'html.parser')
     # Try finding elements with a more specific selector
-    elements = soup.select(f'a[class*="{classname}"]')
-    if not elements:
+    elements = soup.find_all('a', class_=classname)
+    #if not elements:
         # Fallback to searching for any link containing the class substring
-        elements = soup.find_all(lambda tag: tag.name == 'a' and classname in str(tag.get('class', [])))
+        #elements = soup.find_all(lambda tag: tag.name == 'a' and classname in str(tag.get('class', [])))
+
+    # Extract video title from the page
     
+    
+    video_title = soup.select_one('#title yt-formatted-string').text
     # Extract the href attributes
     links = [el.get('href') for el in elements if el.get('href')]
-    return links
+    
+    return links, video_title
 
 def main():
     # Setup argument parser
     parser = argparse.ArgumentParser(description="Extract href attributes from a YouTube page.")
     parser.add_argument('url', type=str, help="YouTube link to extract hrefs from.")
-    parser.add_argument('--thumb', action='store_true', help="Use thumbnail classname.")
+    parser.add_argument('--classname', default=CLASSNAME, required=False, help="Specify a custom classname.")
     args = parser.parse_args()
     
     # Determine the classname based on the flag
-    classname = "yt-video-attribute-view-model__link-container" if args.thumb else "yt-core-attributed-string__link"
+    
     # Extract links
 
     try:
-        links = extract_links(args.url, classname)
+        links, video_title = extract_links(args.url, args.classname)
+
+        print(f"Video Title: {video_title}\n")
+        print("Links:")
+        for link in links:
+            print(link)
 
         if not links:
             print("No links found with the specified class.")
@@ -60,7 +73,7 @@ def main():
         from datetime import datetime
         
         current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        folder_name = args.url.split('/')[-1]  # Get the last part of the URL
+        folder_name = video_title
         filename = f'extracted_links_{current_time}.txt'
         
         # Create folder if it doesn't exist
@@ -86,7 +99,7 @@ def main():
                 '-x',  # Extract audio
                 '--audio-format', 'mp3',  # Convert to mp3
                 '--audio-quality', '0',  # Best quality
-                '-o', f'{folder_name}/%(title)s.%(ext)s',  # Save in folder
+                '-o', f'{destination_folder}/%(channel)s-%(title)s.%(ext)s',  # Save in folder
                 link
             ])
 
